@@ -1,0 +1,23 @@
+# System files
+.DS_Store
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+
+# Jekyll build output
+_site/
+
+# Ruby/Jekyll dependencies
+.bundle/
+vendor/
+Gemfile.lock
+
+
+# Sensitive files
+*.docx
+.env
+*KEY*
+*TOKEN*
