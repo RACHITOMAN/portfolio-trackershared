@@ -42,19 +42,20 @@ function exportTransactionsToCSV() {
     return;
   }
 
-  const headers = ['Date', 'Symbol', 'Portfolio', 'Type', 'Shares', 'Price', 'PremiumType'];
+  // Use the CORRECT order that matches import expectations
+  const headers = ['Type', 'Portfolio', 'Symbol', 'Shares', 'Price', 'Date', 'PremiumType'];
   
   const rows = transactions.map(t => {
     const portfolioObj = portfolios.find(p => p.id === t.portfolio);
     const portfolioName = portfolioObj ? portfolioObj.name : t.portfolio.toUpperCase();
     
     return [
-      formatDateDDMMYYYY(t.date),
-      t.symbol,
-      portfolioName,
       t.type,
+      portfolioName,
+      t.symbol,
       t.shares,
       t.price,
+      formatDateDDMMYYYY(t.date),
       t.premium_type || ''
     ];
   });
@@ -228,8 +229,9 @@ function refreshPricesAndNames() {
       };
     }
     
-    if (t.type === 'buy' || t.type === 'dividend' || t.type === 'premium') {
-      // Add shares for buys and DRIP dividends
+    if (t.type === 'buy' || t.type === 'dividend') {
+      // Add shares for buys and DRIP dividends ONLY
+      // Do NOT include premium shares
       if (t.type === 'buy' || (t.type === 'dividend' && t.shares > 0)) {
         globalSymbolData[t.symbol].buys += t.shares;
       }
@@ -378,27 +380,9 @@ function refreshPricesAndNames() {
     }
   });
 
-  transactions.forEach(function(t) {
-    if (t.type === 'premium' && t.premium_type === 'csp_expired') {
-      const key = t.symbol + '_premium_' + t.date;
-      soldData[key] = {
-        portfolio: t.portfolio,
-        symbol: t.symbol,
-        sharesSold: t.shares,
-        avgBuyPrice: 0,
-        avgSellPrice: t.price,
-        totalCost: 0,
-        totalProceeds: t.shares * t.price,
-        realizedGain: t.shares * t.price,
-        gainPercent: t.price > 0 ? '100.00' : t.price < 0 ? '-100.00' : '0.00',
-        firstBuy: t.date,
-        lastSell: t.date,
-        isPremium: true,
-        premiumType: 'CSP Expired'
-      };
-    }
-  });
-
+  // Note: Premiums are NOT included in sold positions
+  // They are tracked separately in the Premiums tab
+  
   updateTables(globalSymbolData, portfolioData, soldData);
   const activeTab = document.querySelector('.tab.active');
   const currentPortfolio = activeTab ? activeTab.dataset.tab : 'total';
@@ -596,6 +580,10 @@ async function processCsvData(csvData) {
         } else {
           console.warn('Portfolio not found:', value);
         }
+      } else if (header === 'premiumtype') {
+        // Map premiumtype to premium_type (with underscore)
+        transaction['premium_type'] = value;
+        return; // Don't set transaction[header] below
       }
       transaction[header] = value;
     });
@@ -703,6 +691,16 @@ async function fetchLivePrices(symbols) {
   if (spinnerEl) spinnerEl.remove();
 }
 
+async function savePricesCache() {
+  // Save prices to localStorage
+  try {
+    localStorage.setItem('portfolio_prices', JSON.stringify(livePrices));
+    console.log('✅ Prices saved to cache');
+  } catch (e) {
+    console.error('Failed to save prices cache:', e);
+  }
+}
+
 async function getLivePrice(symbol) {
   if (livePrices[symbol]) return;
   
@@ -796,13 +794,16 @@ function updateAllTransactionsTable() {
   filteredTransactions.sort((a, b) => new Date(b.date) - new Date(a.date));
   
   // Populate table
-  filteredTransactions.forEach(t => {
+  filteredTransactions.forEach((t, index) => {
     const row = document.createElement('tr');
     const portfolioObj = portfolios.find(p => p.id === t.portfolio);
     const portfolioName = portfolioObj ? portfolioObj.name : t.portfolio.toUpperCase();
     
+    // Find the original index in the transactions array
+    const originalIndex = transactions.indexOf(t);
+    
     row.innerHTML = `
-      <td><input type="checkbox" class="select-row" data-type="${t.type}" data-portfolio="${t.portfolio}" data-symbol="${t.symbol}" data-shares="${t.shares}" data-price="${t.price}" data-date="${t.date}"></td>
+      <td><input type="checkbox" class="select-row" data-index="${originalIndex}" data-type="${t.type}" data-portfolio="${t.portfolio}" data-symbol="${t.symbol}" data-shares="${t.shares}" data-price="${t.price}" data-date="${t.date}"></td>
       <td>${t.type.toUpperCase()}</td>
       <td>${portfolioName}</td>
       <td>${t.symbol}</td>

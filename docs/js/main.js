@@ -256,6 +256,124 @@ let holdings = {};
   const weightedDaysHeld = totalValue > 0 ? totalWeightedDays / totalValue : 0;
   document.getElementById('weightedDaysHeld').textContent = Math.round(weightedDaysHeld) + ' days';
 }
+
+function updateSoldSidebar(soldData) {
+  const sidebar = document.getElementById('soldSidebar');
+  
+  if (!sidebar) return;
+  
+  // Calculate realized and unrealized gains
+  let totalRealizedGain = 0;
+  let totalUnrealizedGain = 0;  // From positions still held
+  const portfolioStats = {};
+  
+  // Initialize portfolio stats
+  portfolios.filter(p => p.id !== 'total').forEach(p => {
+    portfolioStats[p.id] = {
+      name: p.name,
+      color: p.color,
+      realizedGain: 0,
+      unrealizedGain: 0,
+      soldPositions: 0
+    };
+  });
+  
+  // Calculate realized gains from sold positions
+  for (const key in soldData) {
+    const data = soldData[key];
+    const portfolioId = data.portfolio;
+    
+    totalRealizedGain += data.realizedGain;
+    
+    if (portfolioStats[portfolioId]) {
+      portfolioStats[portfolioId].realizedGain += data.realizedGain;
+      portfolioStats[portfolioId].soldPositions++;
+    }
+  }
+  
+  // Calculate unrealized gains from current holdings
+  for (const symbol in globalSymbolData) {
+    const data = globalSymbolData[symbol];
+    if (data.netShares > 0) {
+      const unrealizedGain = data.gainLoss || 0;
+      totalUnrealizedGain += unrealizedGain;
+      
+      const portfolioId = data.portfolio;
+      if (portfolioStats[portfolioId]) {
+        portfolioStats[portfolioId].unrealizedGain += unrealizedGain;
+      }
+    }
+  }
+  
+  // Build sidebar HTML using same structure as dividends/premiums
+  let html = '';
+  
+  html += `
+    <div class="summary-card">
+      <h3>Total Realized Gain</h3>
+      <div class="value ${totalRealizedGain >= 0 ? 'positive' : 'negative'}">
+        $${totalRealizedGain.toFixed(2)}
+      </div>
+      <div class="change">From sold positions</div>
+    </div>
+  `;
+  
+  html += `
+    <div class="summary-card">
+      <h3>Total Unrealized Gain</h3>
+      <div class="value ${totalUnrealizedGain >= 0 ? 'positive' : 'negative'}">
+        $${totalUnrealizedGain.toFixed(2)}
+      </div>
+      <div class="change">From current holdings</div>
+    </div>
+  `;
+  
+  const combinedTotal = totalRealizedGain + totalUnrealizedGain;
+  html += `
+    <div class="summary-card" style="background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%); border-color: #667eea;">
+      <h3>Combined Total</h3>
+      <div class="value ${combinedTotal >= 0 ? 'positive' : 'negative'}">
+        $${combinedTotal.toFixed(2)}
+      </div>
+      <div class="change">Realized + Unrealized</div>
+    </div>
+  `;
+  
+  // Per-portfolio breakdown
+  portfolios.filter(p => p.id !== 'total').forEach(p => {
+    const stats = portfolioStats[p.id];
+    if (!stats) return;
+    
+    const colorClass = `portfolio-color-${stats.color}`;
+    const portfolioTotal = stats.realizedGain + stats.unrealizedGain;
+    
+    html += `
+      <div class="summary-card">
+        <h3>
+          <span class="portfolio-indicator ${colorClass}"></span>
+          ${stats.name}
+        </h3>
+        <div class="value ${portfolioTotal >= 0 ? 'positive' : 'negative'}">
+          $${portfolioTotal.toFixed(2)}
+        </div>
+        <div class="change">
+          Realized: <span class="${stats.realizedGain >= 0 ? 'positive' : 'negative'}">
+            $${stats.realizedGain.toFixed(2)}
+          </span>
+        </div>
+        <div class="change">
+          Unrealized: <span class="${stats.unrealizedGain >= 0 ? 'positive' : 'negative'}">
+            $${stats.unrealizedGain.toFixed(2)}
+          </span>
+        </div>
+        ${stats.soldPositions > 0 ? `<div class="change" style="margin-top: 4px;">${stats.soldPositions} sold</div>` : ''}
+      </div>
+    `;
+  });
+  
+  sidebar.innerHTML = html;
+}
+
 async function init() {
     initializePriceMode();  // <-- ADD THIS LINE
   checkFirstVisit();
@@ -277,6 +395,21 @@ async function init() {
   refreshPricesAndNames();
   console.log('Called refreshPricesAndNames, globalSymbolData keys:', Object.keys(globalSymbolData).length);
 
+  // Check for symbols with missing prices and fetch them
+  const symbolsWithoutPrices = [];
+  for (const symbol in globalSymbolData) {
+    if (!livePrices[symbol] || livePrices[symbol] === 0) {
+      symbolsWithoutPrices.push(symbol);
+    }
+  }
+  
+  if (symbolsWithoutPrices.length > 0) {
+    console.log('Fetching prices for', symbolsWithoutPrices.length, 'symbols without cached prices');
+    await fetchLivePrices(symbolsWithoutPrices);
+    refreshPricesAndNames(); // Refresh display with new prices
+  } else {
+    console.log('All symbols have cached prices');
+  }
   
   // CSV Template Download
 const downloadTemplateBtn = document.getElementById('downloadTemplateBtn');
@@ -415,4 +548,221 @@ document.getElementById('type').addEventListener('change', function() {
 });
 }
 
-init();
+init();// ============================================
+// HYBRID PREMIUMS TABLE - EXPANDABLE ROWS
+// ============================================
+// Add this to main.js
+
+function updatePremiumsTable(period = 'lifetime') {
+  const tbody = document.querySelector('#premiumsTable tbody');
+  if (!tbody) return;
+  
+  tbody.innerHTML = '';
+  
+  // Filter transactions by date period
+  const now = new Date();
+  const filteredTxns = transactions.filter(t => {
+    if (t.type !== 'premium') return false;
+    
+    const txnDate = new Date(t.date);
+    
+    switch(period) {
+      case '1month':
+        const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+        return txnDate >= oneMonthAgo;
+      case 'quarter':
+        const quarterAgo = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
+        return txnDate >= quarterAgo;
+      case 'ytd':
+        const yearStart = new Date(now.getFullYear(), 0, 1);
+        return txnDate >= yearStart;
+      case 'lifetime':
+      default:
+        return true;
+    }
+  });
+  
+  // Group by symbol
+  const symbolData = {};
+  
+  filteredTxns.forEach(t => {
+    if (!symbolData[t.symbol]) {
+      symbolData[t.symbol] = {
+        symbol: t.symbol,
+        portfolio: t.portfolio,
+        trades: [],
+        tradeCount: 0,
+        totalPremium: 0,
+        coveredCalls: 0,
+        cspExpired: 0,
+        cspAssigned: 0,
+        latestDate: t.date
+      };
+    }
+    
+    const data = symbolData[t.symbol];
+    data.trades.push(t);
+    data.tradeCount++;
+    data.totalPremium += t.shares * t.price;
+    
+    if (t.premium_type === 'covered_call') {
+      data.coveredCalls += t.shares * t.price;
+    } else if (t.premium_type === 'csp_expired') {
+      data.cspExpired += t.shares * t.price;
+    } else if (t.premium_type === 'csp_assigned') {
+      data.cspAssigned += t.shares * t.price;
+    }
+    
+    if (new Date(t.date) > new Date(data.latestDate)) {
+      data.latestDate = t.date;
+    }
+  });
+  
+  // Sort by total premium (highest first)
+  const sortedData = Object.values(symbolData).sort((a, b) => b.totalPremium - a.totalPremium);
+  
+  // Populate table with aggregated rows (expandable)
+  sortedData.forEach(data => {
+    const portfolioObj = portfolios.find(p => p.id === data.portfolio);
+    const portfolioName = portfolioObj ? portfolioObj.name : data.portfolio.toUpperCase();
+    
+    // Main aggregated row (clickable)
+    const row = document.createElement('tr');
+    row.className = 'premium-summary-row';
+    row.dataset.symbol = data.symbol;
+    row.style.cursor = 'pointer';
+    row.style.backgroundColor = '#f8f9fa';
+    
+    row.innerHTML = `
+      <td>
+        <span class="expand-icon" style="margin-right: 8px; font-size: 1.2em;">▶</span>
+        <strong style="color: #667eea;">${data.symbol}</strong>
+      </td>
+      <td>${portfolioName}</td>
+      <td><strong>${data.tradeCount}</strong></td>
+      <td style="color: #28a745; font-weight: bold;">$${data.totalPremium.toFixed(2)}</td>
+      <td>$${data.coveredCalls.toFixed(2)}</td>
+      <td>$${data.cspExpired.toFixed(2)}</td>
+      <td>$${data.cspAssigned.toFixed(2)}</td>
+      <td>${formatDateDDMMYYYY(data.latestDate)}</td>
+    `;
+    
+    tbody.appendChild(row);
+    
+    // Create detail rows (hidden by default)
+    data.trades.sort((a, b) => new Date(b.date) - new Date(a.date)).forEach((t, idx) => {
+      const detailRow = document.createElement('tr');
+      detailRow.className = 'premium-detail-row';
+      detailRow.dataset.symbol = data.symbol;
+      detailRow.style.display = 'none';
+      detailRow.style.backgroundColor = idx % 2 === 0 ? '#ffffff' : '#f8f9fa';
+      
+      const totalPremium = t.shares * t.price;
+      
+      let premiumTypeDisplay = '';
+      let typeColor = '';
+      if (t.premium_type === 'covered_call') {
+        premiumTypeDisplay = 'Covered Call';
+        typeColor = '#667eea';
+      } else if (t.premium_type === 'csp_expired') {
+        premiumTypeDisplay = 'CSP Expired';
+        typeColor = '#28a745';
+      } else if (t.premium_type === 'csp_assigned') {
+        premiumTypeDisplay = 'CSP Assigned';
+        typeColor = '#ffc107';
+      }
+      
+      detailRow.innerHTML = `
+        <td colspan="1" style="padding-left: 40px;">
+          <input type="checkbox" class="select-row" data-type="${t.type}" data-portfolio="${t.portfolio}" data-symbol="${t.symbol}" data-shares="${t.shares}" data-price="${t.price}" data-date="${t.date}">
+        </td>
+        <td colspan="2" style="color: ${typeColor}; font-weight: 500;">${premiumTypeDisplay}</td>
+        <td>${t.shares.toFixed(2)} shares</td>
+        <td>$${t.price.toFixed(2)}/share</td>
+        <td colspan="2" style="color: #28a745; font-weight: bold;">$${totalPremium.toFixed(2)}</td>
+        <td>${formatDateDDMMYYYY(t.date)}</td>
+      `;
+      
+      tbody.appendChild(detailRow);
+    });
+    
+    // Add click handler to toggle expansion
+    row.addEventListener('click', function(e) {
+      // Don't toggle if clicking checkbox
+      if (e.target.type === 'checkbox') return;
+      
+      const symbol = this.dataset.symbol;
+      const detailRows = tbody.querySelectorAll(`.premium-detail-row[data-symbol="${symbol}"]`);
+      const expandIcon = this.querySelector('.expand-icon');
+      const isExpanded = detailRows[0].style.display !== 'none';
+      
+      detailRows.forEach(row => {
+        row.style.display = isExpanded ? 'none' : 'table-row';
+      });
+      
+      expandIcon.textContent = isExpanded ? '▶' : '▼';
+      this.style.backgroundColor = isExpanded ? '#f8f9fa' : '#e3f2fd';
+    });
+  });
+  
+  // Update sidebar with totals
+  updatePremiumsSidebar(sortedData);
+}
+
+function updatePremiumsSidebar(premiumData) {
+  const sidebar = document.getElementById('premiumsSidebar');
+  if (!sidebar) return;
+  
+  let totalPremium = 0;
+  let totalTrades = 0;
+  let totalCoveredCalls = 0;
+  let totalCspExpired = 0;
+  let totalCspAssigned = 0;
+  
+  premiumData.forEach(data => {
+    totalPremium += data.totalPremium;
+    totalTrades += data.tradeCount;
+    totalCoveredCalls += data.coveredCalls;
+    totalCspExpired += data.cspExpired;
+    totalCspAssigned += data.cspAssigned;
+  });
+  
+  sidebar.innerHTML = `
+    <h3 style="margin-top: 0; color: #667eea;">💰 Premium Summary</h3>
+    
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 16px; border-radius: 8px; color: white; margin-bottom: 16px;">
+      <div style="font-size: 0.9em; opacity: 0.9;">Total Premium Income</div>
+      <div style="font-size: 1.8em; font-weight: bold; margin-top: 4px;">$${totalPremium.toFixed(2)}</div>
+      <div style="font-size: 0.85em; opacity: 0.8; margin-top: 4px;">${totalTrades} trades</div>
+    </div>
+    
+    <div style="background: white; padding: 12px; border-radius: 8px; border: 1px solid #e0e0e0; margin-bottom: 12px;">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+        <span style="color: #666;">Covered Calls:</span>
+        <strong style="color: #667eea;">$${totalCoveredCalls.toFixed(2)}</strong>
+      </div>
+      <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+        <span style="color: #666;">CSP Expired:</span>
+        <strong style="color: #28a745;">$${totalCspExpired.toFixed(2)}</strong>
+      </div>
+      <div style="display: flex; justify-content: space-between;">
+        <span style="color: #666;">CSP Assigned:</span>
+        <strong style="color: #ffc107;">$${totalCspAssigned.toFixed(2)}</strong>
+      </div>
+    </div>
+    
+    <div style="background: #f8f9fa; padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+      <div style="font-size: 0.9em; color: #666; margin-bottom: 8px;">💡 Top Premium Earners</div>
+      ${premiumData.slice(0, 5).map(data => `
+        <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #e0e0e0;">
+          <span style="font-weight: 500; color: #667eea;">${data.symbol}</span>
+          <span style="color: #28a745; font-weight: bold;">$${data.totalPremium.toFixed(2)}</span>
+        </div>
+      `).join('')}
+    </div>
+    
+    <div style="font-size: 0.85em; color: #888; padding: 8px; background: #fff3cd; border-radius: 6px; border-left: 3px solid #ffc107;">
+      <strong>💡 Tip:</strong> Click any ticker to expand and see individual trades!
+    </div>
+  `;
+}

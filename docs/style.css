@@ -25,10 +25,17 @@ body {
   display: flex;
   min-height: 100vh;
   flex-direction: column;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+/* Ensure all elements use border-box */
+*, *::before, *::after {
+  box-sizing: border-box;
 }
 
 h1 {
-  font-size: 1.8em;
+  font-size: clamp(1.3em, 3vw, 1.8em);
   margin: 20px 0 5px;
   color: #2c3e50;
   display: flex;
@@ -424,10 +431,11 @@ p {
 .layout-wrapper {
   display: flex;
   width: 100%;
+  max-width: 100%;
   gap: 20px;
   margin: 0 auto;
   flex-grow: 1;
-  padding: 0 20px;
+  padding: 0 clamp(10px, 2vw, 20px);
   box-sizing: border-box;
 }
 
@@ -436,7 +444,7 @@ p {
   border-radius: 12px;
   padding: 16px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  width: 200px;
+  width: clamp(180px, 15vw, 220px);
   min-height: 0;
   overflow-y: auto;
   z-index: 200;
@@ -446,11 +454,11 @@ p {
 
 .main-content {
   flex-grow: 1;
-  width: calc(100% - 220px);
+  width: 100%;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 20px;
-  min-width: 0;
   box-sizing: border-box;
 }
 
@@ -645,16 +653,22 @@ p {
 table {
   width: 100%;
   border-collapse: collapse;
-  table-layout: fixed;
-  min-width: 800px;
+  table-layout: auto;
+  min-width: 600px;
+}
+
+/* Table container with horizontal scroll */
+.table-container {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 th, td {
-  padding: 12px;
+  padding: clamp(8px, 1vw, 12px);
   border: 1px solid #e9ecef;
   text-align: center;
-  font-size: 0.9em;
-  width: 7.14%;
+  font-size: clamp(0.75em, 1.5vw, 0.9em);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -823,10 +837,23 @@ button:disabled {
 
 /* ============ MEDIA QUERIES ============ */
 
+/* Tablet and smaller laptops */
+@media (max-width: 1200px) {
+  .sidebar {
+    width: 180px;
+  }
+  
+  th, td {
+    font-size: 0.85em;
+    padding: 10px;
+  }
+}
+
+/* Tablets */
 @media (max-width: 1024px) {
   .layout-wrapper {
     flex-direction: column;
-    padding: 0;
+    padding: 0 15px;
   }
   
   .sidebar {
@@ -846,6 +873,78 @@ button:disabled {
   .controls input, .controls select, #tickerSearchInput {
     min-width: auto;
     width: 100%;
+  }
+  
+  table {
+    min-width: 500px;
+  }
+}
+
+/* Mobile phones */
+@media (max-width: 768px) {
+  .layout-wrapper {
+    padding: 0 10px;
+  }
+  
+  h1 {
+    font-size: 1.3em;
+  }
+  
+  .tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .tab {
+    font-size: 0.85em;
+    padding: 8px 12px;
+  }
+  
+  table {
+    min-width: 400px;
+    font-size: 0.8em;
+  }
+  
+  th, td {
+    padding: 6px 4px;
+    font-size: 0.75em;
+  }
+  
+  .modal-content {
+    width: 95% !important;
+    max-width: 95% !important;
+    padding: 15px;
+  }
+}
+
+/* Small mobile phones */
+@media (max-width: 480px) {
+  body {
+    font-size: 14px;
+  }
+  
+  .layout-wrapper {
+    padding: 0 5px;
+    gap: 10px;
+  }
+  
+  h1 {
+    font-size: 1.1em;
+    margin: 10px 0;
+  }
+  
+  .tab {
+    font-size: 0.75em;
+    padding: 6px 8px;
+  }
+  
+  table {
+    min-width: 350px;
+  }
+  
+  button {
+    font-size: 0.85em;
+    padding: 8px 12px;
   }
 }
 /* ============ ZEBRA STRIPING & PORTFOLIO COLORS ============ */
@@ -1111,3 +1210,162 @@ table th[data-sort="symbol"] {
   border-radius: 4px;
   margin: 10px 0;
 }
+
+/* ============ HIGH DPI / RETINA DISPLAY SUPPORT ============ */
+/* For high resolution displays (2x, 3x, etc.) */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  table {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  
+  th, td {
+    border-width: 0.5px;
+  }
+}
+
+/* ============ WINDOWS SCALING ADJUSTMENTS ============ */
+/* Handles Windows display scaling (100%, 125%, 150%, 175%, 200%) */
+@media (min-resolution: 120dpi) and (max-resolution: 144dpi) {
+  /* 125% scaling */
+  body {
+    font-size: 15px;
+  }
+  
+  h1 {
+    font-size: 1.6em;
+  }
+}
+
+@media (min-resolution: 144dpi) and (max-resolution: 168dpi) {
+  /* 150% scaling */
+  body {
+    font-size: 14px;
+  }
+  
+  h1 {
+    font-size: 1.5em;
+  }
+  
+  .sidebar {
+    width: 160px;
+  }
+}
+
+@media (min-resolution: 168dpi) {
+  /* 175%+ scaling */
+  body {
+    font-size: 13px;
+  }
+  
+  h1 {
+    font-size: 1.4em;
+  }
+  
+  .sidebar {
+    width: 150px;
+  }
+  
+  table {
+    min-width: 500px;
+  }
+}
+
+/* ============ ZOOM LEVEL ADJUSTMENTS ============ */
+/* Handles browser zoom levels */
+.layout-wrapper {
+  max-width: 100vw;
+}
+
+.main-content {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Ensure tables don't break layout */
+.content-section {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ============ ULTRA-WIDE MONITOR SUPPORT ============ */
+@media (min-width: 1920px) {
+  .layout-wrapper {
+    max-width: 1800px;
+    margin: 0 auto;
+  }
+  
+  .sidebar {
+    width: 250px;
+  }
+}
+
+@media (min-width: 2560px) {
+  .layout-wrapper {
+    max-width: 2200px;
+  }
+  
+  body {
+    font-size: 18px;
+  }
+  
+  h1 {
+    font-size: 2em;
+  }
+}
+
+
+/* ============ EXPANDABLE PREMIUMS TABLE ============ */
+.premium-summary-row {
+  background-color: #f8f9fa !important;
+  font-weight: 600;
+  transition: background-color 0.2s ease;
+}
+
+.premium-summary-row:hover {
+  background-color: #e3f2fd !important;
+}
+
+.premium-detail-row {
+  transition: all 0.2s ease;
+}
+
+.premium-detail-row td {
+  font-size: 0.9em;
+  padding: 10px 8px !important;
+}
+
+.expand-icon {
+  display: inline-block;
+  transition: transform 0.2s ease;
+  font-weight: bold;
+  color: #667eea;
+}
+
+.premium-summary-row[data-expanded="true"] .expand-icon {
+  transform: rotate(90deg);
+}
+
+/* Zebra striping for detail rows */
+.premium-detail-row:nth-child(even) {
+  background-color: #f8f9fa !important;
+}
+
+.premium-detail-row:nth-child(odd) {
+  background-color: #ffffff !important;
+}
+
+.premium-detail-row:hover {
+  background-color: #fff9e6 !important;
+}
+
+/* Make summary row stand out */
+.premium-summary-row td:first-child {
+  border-left: 4px solid #667eea;
+}
+

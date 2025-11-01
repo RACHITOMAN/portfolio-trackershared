@@ -331,10 +331,42 @@ async function addTransaction() {
     transactions.push(transaction);
     await saveDataToLocalStorage();
     
+    // Reset ALL form fields to initial state
+    document.getElementById('type').value = 'buy';
+    document.getElementById('portfolio').value = portfolios.filter(p => p.id !== 'total')[0]?.id || '';
     document.getElementById('symbol').value = '';
     document.getElementById('shares').value = '';
     document.getElementById('price').value = '';
     document.getElementById('date').value = '';
+    
+    // Hide premium type selector
+    const premiumTypeSelect = document.getElementById('premiumType');
+    if (premiumTypeSelect) {
+      premiumTypeSelect.style.display = 'none';
+    }
+    
+    // Hide dividend type selector
+    const dividendTypeSelect = document.getElementById('dividendType');
+    if (dividendTypeSelect) {
+      dividendTypeSelect.style.display = 'none';
+      dividendTypeSelect.value = 'drip'; // Reset to default
+    }
+    
+    // Reset shares and price field states
+    const sharesInput = document.getElementById('shares');
+    const priceInput = document.getElementById('price');
+    if (sharesInput) {
+      sharesInput.disabled = false;
+      sharesInput.placeholder = 'Shares/Amount';
+      sharesInput.style.background = 'white';
+      sharesInput.style.color = 'black';
+    }
+    if (priceInput) {
+      priceInput.disabled = false;
+      priceInput.placeholder = 'Price';
+      priceInput.style.background = 'white';
+      priceInput.style.color = 'black';
+    }
     
     if (!livePrices[symbol]) {
       await getLivePrice(symbol);
@@ -390,12 +422,16 @@ async function confirmDeleteSelected() {
       symbolsToDelete.push(symbol);
     });
     
-    for (const symbol of symbolsToDelete) {
-      
-    }
-    
     // Remove from local array
     transactions = transactions.filter(t => !symbolsToDelete.includes(t.symbol));
+    
+    // Save updated data
+    await saveDataToLocalStorage();
+    
+    // Refresh the display
+    refreshPricesAndNames();
+    
+    alert(`✅ Deleted all transactions for ${symbolsToDelete.length} symbol(s)`);
   }
   // Handle "All Transactions" tab (delete specific transactions by index)
   else if (currentTab === 'all') {
@@ -406,6 +442,11 @@ async function confirmDeleteSelected() {
         indicesToDelete.push(index);
       }
     });
+    
+    if (indicesToDelete.length === 0) {
+      alert('No valid transactions selected');
+      return;
+    }
     
     // Sort indices in descending order to delete from end to start
     indicesToDelete.sort((a, b) => b - a);
@@ -419,41 +460,63 @@ async function confirmDeleteSelected() {
     
     // Save updated data
     await saveDataToLocalStorage();
+    
+    // Refresh the display
+    refreshPricesAndNames();
+    
+    alert(`✅ Deleted ${indicesToDelete.length} transaction(s)`);
   }
   // Handle ticker search and sold positions
   else if (currentTab === 'ticker') {
-  const transactionsToDelete = [];
-  
-  checkboxes.forEach(function(checkbox) {
-    // Skip summary row
-    if (checkbox.dataset.type === 'summary') return;
+    const transactionsToDelete = [];
     
-    // Get data from checkbox attributes
-    const type = checkbox.dataset.type;
-    const portfolio = checkbox.dataset.portfolio;
-    const symbol = checkbox.dataset.symbol;
-    const shares = parseFloat(checkbox.dataset.shares);
-    const price = parseFloat(checkbox.dataset.price);
-    const date = checkbox.dataset.date;
+    checkboxes.forEach(function(checkbox) {
+      // Skip summary row
+      if (checkbox.dataset.type === 'summary') return;
+      
+      // Get data from checkbox attributes
+      const type = checkbox.dataset.type;
+      const portfolio = checkbox.dataset.portfolio;
+      const symbol = checkbox.dataset.symbol;
+      const shares = parseFloat(checkbox.dataset.shares);
+      const price = parseFloat(checkbox.dataset.price);
+      const date = checkbox.dataset.date;
+      
+      transactionsToDelete.push({ type, portfolio, symbol, shares, price, date });
+    });
     
-    transactionsToDelete.push({ type, portfolio, symbol, shares, price, date });
-  });
-  
-  console.log('Deleting from ticker search:', transactionsToDelete);
-  
-  if (transactionsToDelete.length === 0) {
-    alert('No transactions selected (summary row cannot be deleted)');
-    return;
+    console.log('Deleting from ticker search:', transactionsToDelete);
+    
+    if (transactionsToDelete.length === 0) {
+      alert('No transactions selected (summary row cannot be deleted)');
+      return;
+    }
+    
+    // Delete matching transactions
+    transactionsToDelete.forEach(item => {
+      const index = transactions.findIndex(t => 
+        t.type === item.type &&
+        t.portfolio === item.portfolio &&
+        t.symbol === item.symbol &&
+        t.shares === item.shares &&
+        t.price === item.price &&
+        t.date === item.date
+      );
+      
+      if (index !== -1) {
+        transactions.splice(index, 1);
+      }
+    });
+    
+    // Save updated data
+    await saveDataToLocalStorage();
+    
+    // Refresh the display
+    refreshPricesAndNames();
+    searchTicker();
+    
+    alert(`✅ Deleted ${transactionsToDelete.length} transaction(s)`);
   }
-  
-  for (const item of transactionsToDelete) {
-  }
-  
-  await loadDataFromLocalStorage();
-  
-  // Refresh the search to update the display
-  searchTicker();
-}
   else if (currentTab === 'sold') {
     const symbolsToDelete = [];
     checkboxes.forEach(function(checkbox) {
@@ -470,16 +533,144 @@ async function confirmDeleteSelected() {
       }
     });
     
-    for (const item of symbolsToDelete) {
+    // Delete transactions
+    symbolsToDelete.forEach(item => {
       if (item.type === 'premium') {
-        
+        // Delete only premium transactions for this symbol
+        transactions = transactions.filter(t => 
+          !(t.symbol === item.symbol && t.type === 'premium')
+        );
       } else {
-        
+        // Delete all transactions for this symbol
+        transactions = transactions.filter(t => t.symbol !== item.symbol);
       }
-    }
+    });
     
-    await loadDataFromLocalStorage();
+    // Save updated data
+    await saveDataToLocalStorage();
+    
+    // Refresh the display
+    refreshPricesAndNames();
+    
+    alert(`✅ Deleted transactions for ${symbolsToDelete.length} symbol(s)`);
   }
   
   refreshPricesAndNames();
+}// ADD THIS FUNCTION TO data-manager.js
+
+async function handleCashFlowCsvImport(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  
+  reader.onload = async function(e) {
+    const csvData = e.target.result;
+    await processCashFlowCsv(csvData);
+  };
+  
+  reader.readAsText(file);
+  
+  // Reset file input so same file can be imported again
+  event.target.value = '';
+}
+
+async function processCashFlowCsv(csvData) {
+  const lines = csvData.split('\n').filter(line => line.trim());
+  if (lines.length <= 1) {
+    alert('CSV file is empty or invalid');
+    return;
+  }
+  
+  // Check headers
+  const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
+  const expectedHeaders = ['date', 'amount', 'type'];
+  
+  const hasCorrectHeaders = expectedHeaders.every(h => headers.includes(h));
+  if (!hasCorrectHeaders) {
+    alert('Invalid CSV format. Expected headers: date, amount, type');
+    return;
+  }
+  
+  const dataLines = lines.slice(1);
+  const newCashFlows = [];
+  
+  dataLines.forEach((line, index) => {
+    const values = line.split(',').map(v => v.trim());
+    
+    // Skip empty lines or summary rows
+    if (values.length < 3 || !values[0]) return;
+    
+    const dateStr = values[0];
+    const amount = parseFloat(values[1]);
+    const type = values[2].toLowerCase();
+    
+    // Validate data
+    if (!dateStr || isNaN(amount) || !type) {
+      console.warn(`Skipping invalid row ${index + 2}:`, line);
+      return;
+    }
+    
+    // Parse date (DD/MM/YYYY format)
+    let dateObj;
+    if (dateStr.includes('/')) {
+      const parts = dateStr.split('/');
+      if (parts.length === 3) {
+        const day = parts[0].padStart(2, '0');
+        const month = parts[1].padStart(2, '0');
+        const year = parts[2];
+        
+        // Fix typo years like "20205" -> "2025"
+        const fixedYear = year.length > 4 ? year.substring(0, 4) : year;
+        
+        dateObj = new Date(`${fixedYear}-${month}-${day}`);
+      }
+    }
+    
+    if (!dateObj || isNaN(dateObj.getTime())) {
+      console.warn(`Invalid date in row ${index + 2}:`, dateStr);
+      return;
+    }
+    
+    const isoDate = dateObj.toISOString().split('T')[0] + 'T00:00:00Z';
+    
+    // Check for duplicates
+    const isDuplicate = cashFlows.some(cf => 
+      cf.date === isoDate && 
+      cf.amount === amount && 
+      cf.type === type
+    );
+    
+    if (isDuplicate) {
+      console.warn(`Skipping duplicate cash flow:`, dateStr, amount, type);
+      return;
+    }
+    
+    newCashFlows.push({
+      date: isoDate,
+      amount: amount,
+      type: type
+    });
+  });
+  
+  if (newCashFlows.length === 0) {
+    alert('No new cash flows to import (all may be duplicates)');
+    return;
+  }
+  
+  // Add to cashFlows array
+  cashFlows.push(...newCashFlows);
+  
+  // Sort by date
+  cashFlows.sort((a, b) => new Date(a.date) - new Date(b.date));
+  
+  // Save to localStorage
+  await saveDataToLocalStorage();
+  
+  // Refresh display
+  updateCashFlowTable();
+  
+  alert(`✅ Imported ${newCashFlows.length} cash flow entries!`);
+  
+  console.log('Cash flows imported:', newCashFlows);
 }
