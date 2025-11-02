@@ -437,7 +437,12 @@ if (downloadTemplateBtn) {
 
   document.getElementById('saveApiKeyBtn').addEventListener('click', saveApiKey);
   document.getElementById('addPortfolioBtn').addEventListener('click', addPortfolio);
-document.getElementById('dividendType').addEventListener('change', handleDividendTypeChange);
+  
+  // Add dividend type handler only if element exists
+  const dividendTypeEl = document.getElementById('dividendType');
+  if (dividendTypeEl) {
+    dividendTypeEl.addEventListener('change', handleDividendTypeChange);
+  }
 
   // Window click to close modal
   window.addEventListener('click', function(event) {
@@ -493,6 +498,14 @@ if (clearTickerBtn) {
   
  // CSV Export
   document.getElementById('exportCsvBtn').addEventListener('click', exportTransactionsToCSV);
+  
+  // Portfolio CSV Exports
+  document.getElementById('exportTotalPortfolioBtn').addEventListener('click', exportTotalPortfolioToCSV);
+  document.getElementById('exportIndividualPortfolioBtn').addEventListener('click', exportSelectedPortfolio);
+  
+  // Populate portfolio export dropdown
+  populateExportPortfolioDropdown();
+  
   // Debounced ticker search
   const debouncedSearch = debounce(searchTicker, 300);
   document.getElementById('tickerSearchInput').addEventListener('input', debouncedSearch);
