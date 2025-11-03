@@ -598,6 +598,59 @@ p {
   transform: translateY(-1px);
 }
 
+#exportTotalPortfolioBtn {
+  background: linear-gradient(135deg, #6610f2 0%, #520dc2 100%);
+  color: white;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+#exportTotalPortfolioBtn:hover {
+  opacity: 0.85;
+  transform: translateY(-1px);
+}
+
+#exportIndividualPortfolioBtn {
+  background: linear-gradient(135deg, #fd7e14 0%, #dc6502 100%);
+  color: white;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+#exportIndividualPortfolioBtn:hover {
+  opacity: 0.85;
+  transform: translateY(-1px);
+}
+
+#exportPortfolioSelect {
+  padding: 10px 16px;
+  border: 2px solid #dee2e6;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  background: white;
+  transition: all 0.2s;
+  margin-left: 10px;
+}
+
+#exportPortfolioSelect:hover {
+  border-color: #fd7e14;
+}
+
+#exportPortfolioSelect:focus {
+  outline: none;
+  border-color: #fd7e14;
+  box-shadow: 0 0 0 3px rgba(253, 126, 20, 0.1);
+}
+
 .tab-content {
   display: none;
 }

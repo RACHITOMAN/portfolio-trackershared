@@ -79,6 +79,169 @@ function exportTransactionsToCSV() {
   
   alert(`✅ Exported ${transactions.length} transactions to CSV`);
 }
+
+// Export Total Portfolio Summary to CSV
+function exportTotalPortfolioToCSV() {
+  if (Object.keys(globalSymbolData).length === 0) {
+    alert('No portfolio data to export');
+    return;
+  }
+
+  const headers = ['Symbol', 'Shares', 'Avg Cost', 'Current Price', 'Cost Basis', 'Current Value', 'Gain/Loss', 'Gain/Loss %', 'XIRR %', 'Days Held'];
+  
+  const rows = Object.entries(globalSymbolData)
+    .filter(([symbol, data]) => data.netShares > 0)
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([symbol, data]) => [
+      symbol,
+      data.netShares.toFixed(2),
+      data.avgCost.toFixed(2),
+      (getCurrentPrice(symbol) || 0).toFixed(2),
+      data.totalCost.toFixed(2),
+      data.currentValue.toFixed(2),
+      data.gainLoss.toFixed(2),
+      parseFloat(data.gainLossPercent).toFixed(2),
+      data.xirr ? (data.xirr * 100).toFixed(2) : 'N/A',
+      Math.round(data.weightedDays)
+    ]);
+
+  const csvContent = [headers, ...rows]
+    .map(row => row.map(cell => `"${cell}"`).join(','))
+    .join('\n');
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  
+  const timestamp = new Date().toISOString().split('T')[0];
+  link.setAttribute('href', url);
+  link.setAttribute('download', `total-portfolio-${timestamp}.csv`);
+  link.style.visibility = 'hidden';
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  
+  alert(`✅ Exported Total Portfolio (${rows.length} holdings) to CSV`);
+}
+
+// Export Individual Portfolio Summary to CSV
+function exportIndividualPortfolioToCSV(portfolioId) {
+  const portfolio = portfolios.find(p => p.id === portfolioId);
+  if (!portfolio) {
+    alert('Portfolio not found');
+    return;
+  }
+
+  // Filter transactions for this portfolio
+  const portfolioTransactions = transactions.filter(t => t.portfolio === portfolioId);
+  
+  if (portfolioTransactions.length === 0) {
+    alert(`No transactions in ${portfolio.name}`);
+    return;
+  }
+
+  // Calculate holdings for this portfolio only
+  const portfolioHoldings = {};
+  
+  portfolioTransactions.forEach(t => {
+    if (t.type === 'premium' || t.type === 'dividend') return;
+    
+    if (!portfolioHoldings[t.symbol]) {
+      portfolioHoldings[t.symbol] = {
+        symbol: t.symbol,
+        netShares: 0,
+        totalCost: 0,
+        transactions: []
+      };
+    }
+    
+    const data = portfolioHoldings[t.symbol];
+    data.transactions.push(t);
+    
+    if (t.type === 'buy') {
+      data.netShares += t.shares;
+      data.totalCost += t.shares * t.price;
+    } else if (t.type === 'sell') {
+      data.netShares += t.shares; // shares are already negative
+      const soldCost = (data.totalCost / (data.netShares - t.shares)) * Math.abs(t.shares);
+      data.totalCost -= soldCost;
+    }
+  });
+
+  const headers = ['Symbol', 'Shares', 'Avg Cost', 'Current Price', 'Cost Basis', 'Current Value', 'Gain/Loss', 'Gain/Loss %'];
+  
+  const rows = Object.values(portfolioHoldings)
+    .filter(data => data.netShares > 0)
+    .sort((a, b) => a.symbol.localeCompare(b.symbol))
+    .map(data => {
+      const avgCost = data.netShares > 0 ? data.totalCost / data.netShares : 0;
+      const currentPrice = getCurrentPrice(data.symbol) || 0;
+      const currentValue = data.netShares * currentPrice;
+      const gainLoss = currentValue - data.totalCost;
+      const gainLossPercent = data.totalCost > 0 ? (gainLoss / data.totalCost * 100) : 0;
+      
+      return [
+        data.symbol,
+        data.netShares.toFixed(2),
+        avgCost.toFixed(2),
+        currentPrice.toFixed(2),
+        data.totalCost.toFixed(2),
+        currentValue.toFixed(2),
+        gainLoss.toFixed(2),
+        gainLossPercent.toFixed(2)
+      ];
+    });
+
+  if (rows.length === 0) {
+    alert(`No current holdings in ${portfolio.name}`);
+    return;
+  }
+
+  const csvContent = [headers, ...rows]
+    .map(row => row.map(cell => `"${cell}"`).join(','))
+    .join('\n');
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  
+  const timestamp = new Date().toISOString().split('T')[0];
+  const safeName = portfolio.name.replace(/[^a-z0-9]/gi, '-').toLowerCase();
+  link.setAttribute('href', url);
+  link.setAttribute('download', `${safeName}-portfolio-${timestamp}.csv`);
+  link.style.visibility = 'hidden';
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  
+  alert(`✅ Exported ${portfolio.name} (${rows.length} holdings) to CSV`);
+}
+
+// Populate the export portfolio dropdown
+function populateExportPortfolioDropdown() {
+  const select = document.getElementById('exportPortfolioSelect');
+  if (!select) return;
+  
+  const userPortfolios = portfolios.filter(p => p.id !== 'total');
+  
+  select.innerHTML = '<option value="">Select Portfolio...</option>' +
+    userPortfolios.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+}
+
+// Export selected portfolio from dropdown
+function exportSelectedPortfolio() {
+  const select = document.getElementById('exportPortfolioSelect');
+  const portfolioId = select.value;
+  
+  if (!portfolioId) {
+    alert('Please select a portfolio to export');
+    return;
+  }
+  
+  exportIndividualPortfolioToCSV(portfolioId);
+}
 // ============ TICKER SEARCH ============
 // ============ CSV TEMPLATE DOWNLOAD ============
 
@@ -383,17 +546,21 @@ function refreshPricesAndNames() {
   // Note: Premiums are NOT included in sold positions
   // They are tracked separately in the Premiums tab
   
+  // Store soldData globally for sidebar
+  globalSoldData = soldData;
+  
   updateTables(globalSymbolData, portfolioData, soldData);
   const activeTab = document.querySelector('.tab.active');
   const currentPortfolio = activeTab ? activeTab.dataset.tab : 'total';
   const portfolioFilter = ['total', ...portfolios.filter(p => p.id !== 'total').map(p => p.id)].includes(currentPortfolio) ? currentPortfolio : 'total';
  
   updateSummary(globalSymbolData, portfolioData, portfolioFilter, soldData);
-updateCashFlowTable();
-updateDividendsTable();
-updatePremiumsTable();
-updateAllTransactionsTable();  // ADD THIS
-clearTickerSearch();            // ADD THIS (initializes ticker table as empty)
+  updateSoldSidebar(soldData); // Update sold sidebar
+  updateCashFlowTable();
+  updateDividendsTable();
+  updatePremiumsTable();
+  updateAllTransactionsTable();  // ADD THIS
+  clearTickerSearch();            // ADD THIS (initializes ticker table as empty)
 }
 // Initialize price mode on page load
 function initializePriceMode() {
@@ -811,6 +978,11 @@ function updateAllTransactionsTable() {
       <td>$${t.price.toFixed(2)}</td>
       <td>${formatDateDDMMYYYY(t.date)}</td>
     `;
+    
+    // Add double-click handler to edit transaction
+    row.ondblclick = function() {
+      showEditModal(originalIndex);
+    };
     
     tbody.appendChild(row);
   });

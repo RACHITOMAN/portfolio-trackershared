@@ -170,8 +170,11 @@ function showTickerModal(symbol) {
             </tr>
           </thead>
           <tbody>
-            ${symbolTransactions.map(t => `
-              <tr style="border-bottom: 1px solid #dee2e6; cursor: pointer;" ondblclick="editTransactionFromModal(${t.id})" title="Double-click to edit">
+            ${symbolTransactions.map(t => {
+              // Find the original index in the full transactions array
+              const originalIndex = transactions.indexOf(t);
+              return `
+              <tr style="border-bottom: 1px solid #dee2e6; cursor: pointer;" ondblclick="editTransactionFromModal(${originalIndex})" title="Double-click to edit">
                 <td style="padding: 10px; text-align: center;">${formatDateDDMMYYYY(t.date)}</td>
                 <td style="padding: 10px; text-align: center;"><span style="background: ${t.type === 'buy' ? '#28a745' : t.type === 'sell' ? '#dc3545' : '#ffc107'}; color: white; padding: 3px 8px; border-radius: 3px; font-size: 12px;">${t.type.toUpperCase()}</span></td>
                 <td style="padding: 10px; text-align: center;">${portfolios.find(p => p.id === t.portfolio)?.name || t.portfolio}</td>
@@ -189,7 +192,8 @@ function showTickerModal(symbol) {
     '$' + (Math.abs(t.shares) * t.price).toFixed(2)}
 </td>        
    </tr>
-`).join('')}
+`;
+            }).join('')}
           </tbody>
 <tfoot>
   <tr style="background: #f0f8ff; border-top: 2px solid #667eea;">
@@ -236,29 +240,18 @@ function closeTickerModal() {
   }
   activeTickerFilter = null;
 }
-function editTransactionFromModal(transactionId) {
+function editTransactionFromModal(transactionIndex) {
   // Close the modal first
   closeTickerModal();
   
-  // Switch to "All Transactions" tab
-  const allTransactionsTab = document.querySelector('[data-tab="all"]');
-  
-  if (allTransactionsTab) {
-    allTransactionsTab.click();
-  }
-  
-  // Find the actual index in transactions array
-  const transactionIndex = transactions.findIndex(t => t.id === transactionId);
-  
-  if (transactionIndex === -1) {
+  // Check if transaction exists
+  if (transactionIndex === -1 || !transactions[transactionIndex]) {
     alert('Transaction not found');
     return;
   }
   
-  // Wait for tab to switch, then trigger edit
-  setTimeout(() => {
-    showEditModal(transactionIndex);
-  }, 300);
+  // Open edit modal directly
+  showEditModal(transactionIndex);
 }
 function getPortfolioColor(portfolioId) {
   const colors = {
@@ -581,8 +574,26 @@ function convertToDateInputFormat(dateValue) {
   return '';
 }
 function showEditModal(transactionIndex) {
+  console.log('🔍 Opening edit for index:', transactionIndex);
+  console.log('🔍 Transaction:', transactions[transactionIndex]);
+  
   const t = transactions[transactionIndex];
-  if (!t) return;
+  if (!t) {
+    console.error('Transaction not found at index:', transactionIndex);
+    return;
+  }
+  
+  // Premium type dropdown (only shown if type is premium)
+  const premiumTypeField = t.type === 'premium' ? `
+    <div id="editPremiumTypeContainer">
+      <label style="display: block; margin-bottom: 5px; font-weight: bold;">Premium Type:</label>
+      <select id="editPremiumType" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+        <option value="covered_call" ${(t.premiumType || t.premium_type) === 'covered_call' ? 'selected' : ''}>Covered Call</option>
+        <option value="csp_expired" ${(t.premiumType || t.premium_type) === 'csp_expired' ? 'selected' : ''}>CSP Expired</option>
+        <option value="csp_assigned" ${(t.premiumType || t.premium_type) === 'csp_assigned' ? 'selected' : ''}>CSP Assigned</option>
+      </select>
+    </div>
+  ` : '';
   
   const modalHTML = `
     <div id="editModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center;">
@@ -594,13 +605,14 @@ function showEditModal(transactionIndex) {
         <form id="editForm" style="display: flex; flex-direction: column; gap: 15px;">
           <div>
             <label style="display: block; margin-bottom: 5px; font-weight: bold;">Type:</label>
-            <select id="editType" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+            <select id="editType" onchange="toggleEditPremiumType()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
               <option value="buy" ${t.type === 'buy' ? 'selected' : ''}>Buy</option>
               <option value="sell" ${t.type === 'sell' ? 'selected' : ''}>Sell</option>
               <option value="dividend" ${t.type === 'dividend' ? 'selected' : ''}>Dividend</option>
               <option value="premium" ${t.type === 'premium' ? 'selected' : ''}>Premium</option>
             </select>
           </div>
+          ${premiumTypeField}
           <div>
             <label style="display: block; margin-bottom: 5px; font-weight: bold;">Portfolio:</label>
             <select id="editPortfolio" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
@@ -621,7 +633,7 @@ function showEditModal(transactionIndex) {
           </div>
           <div>
             <label style="display: block; margin-bottom: 5px; font-weight: bold;">Date:</label>
-<input type="date" id="editDate" value="${convertToDateInputFormat(t.date)}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+            <input type="date" id="editDate" value="${convertToDateInputFormat(t.date)}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
           </div>
           <div style="display: flex; gap: 10px; margin-top: 10px;">
             <button type="button" onclick="saveEditedTransaction(${transactionIndex})" style="flex: 1; background: #28a745; color: white; border: none; padding: 12px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 16px;">💾 Save Changes</button>
@@ -633,6 +645,30 @@ function showEditModal(transactionIndex) {
   `;
   
   document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
+
+// Toggle premium type dropdown when type changes
+function toggleEditPremiumType() {
+  const typeSelect = document.getElementById('editType');
+  const container = document.getElementById('editPremiumTypeContainer');
+  
+  if (typeSelect.value === 'premium' && !container) {
+    // Add premium type dropdown
+    const premiumHTML = `
+      <div id="editPremiumTypeContainer">
+        <label style="display: block; margin-bottom: 5px; font-weight: bold;">Premium Type:</label>
+        <select id="editPremiumType" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+          <option value="covered_call">Covered Call</option>
+          <option value="csp_expired">CSP Expired</option>
+          <option value="csp_assigned">CSP Assigned</option>
+        </select>
+      </div>
+    `;
+    typeSelect.closest('div').insertAdjacentHTML('afterend', premiumHTML);
+  } else if (typeSelect.value !== 'premium' && container) {
+    // Remove premium type dropdown
+    container.remove();
+  }
 }
 function closeEditModal() {
   const modal = document.getElementById('editModal');
@@ -878,16 +914,24 @@ async function saveEditedTransaction(transactionIndex) {
     return;
   }
   
-  transactions[transactionIndex] = {
-    id: transactions[transactionIndex].id,
+  const updatedTransaction = {
     type,
     portfolio,
     symbol,
     shares: type === 'sell' ? -Math.abs(shares) : Math.abs(shares),
     price,
-    date,
-    premium_type: transactions[transactionIndex].premium_type
+    date: date + 'T00:00:00Z'
   };
+  
+  // Add premium type if it's a premium transaction
+  if (type === 'premium') {
+    const premiumTypeField = document.getElementById('editPremiumType');
+    if (premiumTypeField) {
+      updatedTransaction.premiumType = premiumTypeField.value;
+    }
+  }
+  
+  transactions[transactionIndex] = updatedTransaction;
   
   await saveDataToLocalStorage();
   refreshPricesAndNames();
