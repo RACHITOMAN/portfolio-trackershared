@@ -238,6 +238,17 @@ async function loadDataFromLocalStorage() {
       livePrices = JSON.parse(storedPrices);
       console.log('✅ Loaded ' + Object.keys(livePrices).length + ' cached prices from localStorage');
     }
+    
+    // Load manual prices
+    const storedManualPrices = localStorage.getItem('manualPrices');
+    if (storedManualPrices) {
+      manualPrices = JSON.parse(storedManualPrices);
+      // In manual mode, also copy to livePrices for display
+      if (priceMode === 'manual') {
+        Object.assign(livePrices, manualPrices);
+      }
+      console.log('✅ Loaded ' + Object.keys(manualPrices).length + ' manual prices from localStorage');
+    }
   } catch (error) {
     console.error('❌ Error loading data from localStorage:', error);
   }
@@ -368,10 +379,17 @@ async function addTransaction() {
       priceInput.style.color = 'black';
     }
     
-    if (!livePrices[symbol]) {
-      await getLivePrice(symbol);
-    } else {
+    // Refresh prices based on mode
+    if (priceMode === 'manual') {
+      // In manual mode, just refresh the display
       refreshPricesAndNames();
+    } else {
+      // In API mode, fetch price if needed
+      if (!livePrices[symbol]) {
+        await getLivePrice(symbol);
+      } else {
+        refreshPricesAndNames();
+      }
     }
   } else {
     alert('Invalid transaction data');

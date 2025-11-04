@@ -38,8 +38,8 @@ function showTickerModal(symbol) {
       totalSharesBought += t.shares;
       netInvestmentAmount += (t.shares * t.price);
     } else if (t.type === 'sell') {
-      totalSharesSold += t.shares;
-      netInvestmentAmount -= (t.shares * t.price);
+      totalSharesSold += Math.abs(t.shares); // Use absolute value since shares are negative
+      netInvestmentAmount -= (Math.abs(t.shares) * t.price); // Subtract sell proceeds
     } else if (t.type === 'dividend' && t.shares > 0) {
       // DRIP dividends add shares
       totalSharesBought += t.shares;
@@ -65,6 +65,10 @@ function showTickerModal(symbol) {
   const totalShares = totalSharesBought - totalSharesSold;
   const effectiveInvestment = netInvestmentAmount - totalPremiumIncome - totalDividendIncome;
   
+  // For fully sold positions, flip the sign to show realized gain/loss correctly
+  const displayNetInvestment = totalShares === 0 ? -netInvestmentAmount : netInvestmentAmount;
+  const displayEffectiveInvestment = totalShares === 0 ? -effectiveInvestment : effectiveInvestment;
+  
   // Debug logging
   console.log(`${symbol} Modal Calculations:`);
   console.log(`Premium STO (Income): $${totalPremiumSTO.toFixed(2)}`);
@@ -81,8 +85,22 @@ function showTickerModal(symbol) {
   const currentPrice = getCurrentPrice(symbol) || 0;
   const totalCost = holdingData.totalCost || 0;
   const currentValue = holdingData.currentValue || 0;
-  const gainLoss = holdingData.gainLoss || 0;
-  const gainLossPercent = parseFloat(holdingData.gainLossPercent) || 0;
+  
+  // For sold positions, use realized gain; for holdings, use unrealized gain
+  let gainLoss, gainLossPercent;
+  if (totalShares === 0) {
+    // Sold position - show realized gain/loss
+    gainLoss = displayEffectiveInvestment;
+    // Calculate percent: gain / original investment * 100
+    // Original investment = buy amount (positive value from netInvestmentAmount calculation)
+    const originalInvestment = totalSharesBought * (symbolTransactions.find(t => t.type === 'buy')?.price || 0);
+    gainLossPercent = originalInvestment > 0 ? (gainLoss / originalInvestment) * 100 : 0;
+  } else {
+    // Current holding - use data from globalSymbolData
+    gainLoss = holdingData.gainLoss || 0;
+    gainLossPercent = parseFloat(holdingData.gainLossPercent) || 0;
+  }
+  
   const xirrValue = ((holdingData.xirr || 0) * 100);
   const weightedDays = holdingData.weightedDays || 0;
   
@@ -197,10 +215,10 @@ function showTickerModal(symbol) {
           </tbody>
 <tfoot>
   <tr style="background: #f0f8ff; border-top: 2px solid #667eea;">
-    <td colspan="3" style="padding: 10px; text-align: right; font-weight: 600; color: #2c3e50;">Net Investment (Shares):</td>
+    <td colspan="3" style="padding: 10px; text-align: right; font-weight: 600; color: #2c3e50;">${totalShares === 0 ? 'Realized Gain/Loss:' : 'Net Investment (Shares):'}</td>
     <td style="padding: 10px; text-align: center; font-weight: 600;">${totalShares.toFixed(2)}</td>
     <td style="padding: 10px;"></td>
-    <td style="padding: 10px; text-align: center; color: #2c3e50; font-weight: 600;">$${netInvestmentAmount.toFixed(2)}</td>
+    <td style="padding: 10px; text-align: center; color: ${displayNetInvestment >= 0 ? '#28a745' : '#dc3545'}; font-weight: 600;">$${displayNetInvestment.toFixed(2)}</td>
   </tr>
   ${totalPremiumIncome !== 0 ? `
   <tr style="background: #fffef0;">
@@ -219,10 +237,10 @@ function showTickerModal(symbol) {
   </tr>
   ` : ''}
   <tr style="background: #e8f5e9; font-weight: bold; border-top: 3px solid #28a745;">
-    <td colspan="3" style="padding: 12px; text-align: right; font-weight: bold; color: #155724;">Effective Investment:</td>
+    <td colspan="3" style="padding: 12px; text-align: right; font-weight: bold; color: #155724;">${totalShares === 0 ? 'Net Realized Gain/Loss:' : 'Effective Investment:'}</td>
     <td style="padding: 12px; text-align: center; font-weight: bold;">${totalShares.toFixed(2)}</td>
     <td style="padding: 12px;"></td>
-    <td style="padding: 12px; text-align: center; color: #155724; font-weight: bold;">$${effectiveInvestment.toFixed(2)}</td>
+    <td style="padding: 12px; text-align: center; color: ${displayEffectiveInvestment >= 0 ? '#28a745' : '#dc3545'}; font-weight: bold;">$${displayEffectiveInvestment.toFixed(2)}</td>
   </tr>
 </tfoot>
         </table>

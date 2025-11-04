@@ -639,13 +639,17 @@ function saveManualPrices() {
     
     if (symbol && !isNaN(price) && price > 0) {
       manualPrices[symbol] = price;
+      livePrices[symbol] = price; // Also update livePrices for display
       savedCount++;
     }
   });
   
   localStorage.setItem('manualPrices', JSON.stringify(manualPrices));
+  localStorage.setItem('portfolio_prices', JSON.stringify(livePrices));
   alert(`✅ Saved ${savedCount} price${savedCount !== 1 ? 's' : ''}`);
-  location.reload(); // Reload to update display
+  
+  // Refresh display without reloading
+  refreshPricesAndNames();
 }
 
 // Get current price based on mode
@@ -789,6 +793,12 @@ async function processCsvData(csvData) {
 }
 
 async function fetchLivePrices(symbols) {
+  // Skip if in manual price mode
+  if (priceMode === 'manual') {
+    console.log('⚠️ Manual price mode - skipping API fetch');
+    return;
+  }
+  
   const apiKey = localStorage.getItem('apiKey');
   if (!apiKey) {
     alert('Please set your API key in Settings');
@@ -870,6 +880,12 @@ async function savePricesCache() {
 
 async function getLivePrice(symbol) {
   if (livePrices[symbol]) return;
+  
+  // Skip if in manual price mode
+  if (priceMode === 'manual') {
+    console.log('⚠️ Manual price mode - skipping API fetch for', symbol);
+    return;
+  }
   
   const apiKey = localStorage.getItem('apiKey');
   if (!apiKey) {

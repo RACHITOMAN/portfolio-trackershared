@@ -28,3 +28,4 @@ const PORTFOLIO_COLORS = {
   5: 'portfolio-5'
 };
 let priceMode = localStorage.getItem('priceMode') || 'api';
+let manualPrices = {}; // For manual price entry mode

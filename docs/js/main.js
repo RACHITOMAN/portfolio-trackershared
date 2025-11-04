@@ -395,7 +395,7 @@ async function init() {
   refreshPricesAndNames();
   console.log('Called refreshPricesAndNames, globalSymbolData keys:', Object.keys(globalSymbolData).length);
 
-  // Check for symbols with missing prices and fetch them
+  // Check for symbols with missing prices and fetch them (only in API mode)
   const symbolsWithoutPrices = [];
   for (const symbol in globalSymbolData) {
     if (!livePrices[symbol] || livePrices[symbol] === 0) {
@@ -403,12 +403,12 @@ async function init() {
     }
   }
   
-  if (symbolsWithoutPrices.length > 0) {
+  if (symbolsWithoutPrices.length > 0 && priceMode === 'api') {
     console.log('Fetching prices for', symbolsWithoutPrices.length, 'symbols without cached prices');
     await fetchLivePrices(symbolsWithoutPrices);
     refreshPricesAndNames(); // Refresh display with new prices
   } else {
-    console.log('All symbols have cached prices');
+    console.log('All symbols have cached prices or in manual mode');
   }
   
   // CSV Template Download
@@ -498,14 +498,6 @@ if (clearTickerBtn) {
   
  // CSV Export
   document.getElementById('exportCsvBtn').addEventListener('click', exportTransactionsToCSV);
-  
-  // Portfolio CSV Exports
-  document.getElementById('exportTotalPortfolioBtn').addEventListener('click', exportTotalPortfolioToCSV);
-  document.getElementById('exportIndividualPortfolioBtn').addEventListener('click', exportSelectedPortfolio);
-  
-  // Populate portfolio export dropdown
-  populateExportPortfolioDropdown();
-  
   // Debounced ticker search
   const debouncedSearch = debounce(searchTicker, 300);
   document.getElementById('tickerSearchInput').addEventListener('input', debouncedSearch);
