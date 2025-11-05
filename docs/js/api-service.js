@@ -411,7 +411,7 @@ function refreshPricesAndNames() {
       
       globalSymbolData[t.symbol].portfolio = t.portfolio;
     } else if (t.type === 'sell') {
-      globalSymbolData[t.symbol].sells += t.shares;
+      globalSymbolData[t.symbol].sells += Math.abs(t.shares); // Use absolute value since shares are negative
     }
     
     if (t.date < globalSymbolData[t.symbol].firstDate) globalSymbolData[t.symbol].firstDate = t.date;
@@ -506,8 +506,9 @@ function refreshPricesAndNames() {
       });
       
       const avgCostBasis = totalBought > 0 ? totalCost / totalBought : 0;
-      const costBasisForSale = t.shares * avgCostBasis;
-      const proceeds = t.shares * t.price;
+      const sharesSold = Math.abs(t.shares); // Use absolute value for calculations
+      const costBasisForSale = sharesSold * avgCostBasis;
+      const proceeds = sharesSold * t.price;
 
       const coveredCallPremiums = transactions.filter(function(tx) {
         return tx.symbol === t.symbol && 
@@ -529,7 +530,7 @@ function refreshPricesAndNames() {
       soldData[saleKey] = {
         symbol: t.symbol,
         portfolio: t.portfolio,
-        sharesSold: t.shares,
+        sharesSold: sharesSold, // Use the absolute value we calculated
         avgBuyPrice: avgCostBasis,
         avgSellPrice: t.price,
         totalCost: costBasisForSale,

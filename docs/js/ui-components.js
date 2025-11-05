@@ -1,3 +1,6 @@
+// Global variable to track which transaction is being edited
+let currentEditingIndex = null;
+
 function debounce(func, wait) {
   let timeout;
   return function executedFunction(...args) {
@@ -317,8 +320,8 @@ function createAndUpdateSoldSidebar() {
           firstBuyDate = t.date;
         }
       } else if (t.type === 'sell') {
-        totalSells += t.shares;
-        totalSellAmount += t.shares * t.price;
+        totalSells += Math.abs(t.shares); // Use absolute value since shares are negative
+        totalSellAmount += Math.abs(t.shares) * t.price;
         if (!lastSellDate || new Date(t.date) > new Date(lastSellDate)) {
           lastSellDate = t.date;
         }
@@ -594,6 +597,9 @@ function convertToDateInputFormat(dateValue) {
 function showEditModal(transactionIndex) {
   console.log('🔍 Opening edit for index:', transactionIndex);
   console.log('🔍 Transaction:', transactions[transactionIndex]);
+  
+  // Store the index globally
+  currentEditingIndex = transactionIndex;
   
   const t = transactions[transactionIndex];
   if (!t) {
@@ -919,7 +925,25 @@ function generatePriceCell(symbol, currentPrice) {
     return `$${price.toFixed(2)}`;
   }
 }
-async function saveEditedTransaction(transactionIndex) {
+async function saveEditedTransaction() {
+  // Use the globally stored index
+  const transactionIndex = currentEditingIndex;
+  
+  if (transactionIndex === null || transactionIndex === undefined || transactionIndex < 0) {
+    console.error('❌ Invalid transaction index:', transactionIndex);
+    alert('Error: Transaction index not found. Please close and reopen the edit modal.');
+    return;
+  }
+  
+  console.log('💾 Saving transaction at index:', transactionIndex);
+  
+  const originalTransaction = transactions[transactionIndex];
+  if (!originalTransaction) {
+    console.error('❌ Original transaction not found at index:', transactionIndex);
+    alert('Error: Could not find original transaction.');
+    return;
+  }
+  
   const type = document.getElementById('editType').value;
   const portfolio = document.getElementById('editPortfolio').value;
   const symbol = document.getElementById('editSymbol').value.trim().toUpperCase();
@@ -933,10 +957,11 @@ async function saveEditedTransaction(transactionIndex) {
   }
   
   const updatedTransaction = {
+    id: originalTransaction.id || (Date.now() + Math.random()),
     type,
     portfolio,
     symbol,
-    shares: type === 'sell' ? -Math.abs(shares) : Math.abs(shares),
+    shares: originalTransaction.shares, // PRESERVE original shares value!
     price,
     date: date + 'T00:00:00Z'
   };
@@ -949,10 +974,17 @@ async function saveEditedTransaction(transactionIndex) {
     }
   }
   
+  // Update the transaction at the stored index
   transactions[transactionIndex] = updatedTransaction;
+  
+  console.log('✅ Transaction updated:', updatedTransaction);
   
   await saveDataToLocalStorage();
   refreshPricesAndNames();
   closeEditModal();
+  
+  // Clear the global index
+  currentEditingIndex = null;
+  
   alert('Transaction updated successfully!');
 }

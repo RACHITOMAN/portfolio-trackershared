@@ -1,3 +1,160 @@
+function loadSampleTransactions() {
+  const firstPortfolio = portfolios.filter(p => p.id !== 'total')[0]?.id;
+  
+  return [
+    {
+      id: 1730000001,
+      type: 'buy',
+      portfolio: firstPortfolio,
+      symbol: 'DEMO-TECH',
+      shares: 100,
+      price: 100,
+      date: '2025-02-02T00:00:00Z'
+    },
+    {
+      id: 1730000002,
+      type: 'dividend',
+      portfolio: firstPortfolio,
+      symbol: 'DEMO-TECH',
+      shares: 10,
+      price: 0,
+      date: '2025-03-03T00:00:00Z'
+    },
+    {
+      id: 1730000003,
+      type: 'dividend',
+      portfolio: firstPortfolio,
+      symbol: 'DEMO-TECH',
+      shares: 0,
+      price: 400,
+      date: '2025-04-04T00:00:00Z'
+    },
+    {
+      id: 1730000004,
+      type: 'premium',
+      portfolio: firstPortfolio,
+      symbol: 'DEMO-TECH',
+      shares: 100,
+      price: 2,
+      date: '2025-05-05T00:00:00Z',
+      premiumType: 'covered_call',
+      premium_type: 'covered_call'
+    },
+    {
+      id: 1730000005,
+      type: 'premium',
+      portfolio: firstPortfolio,
+      symbol: 'DEMO-TECH',
+      shares: 100,
+      price: 2.5,
+      date: '2025-06-06T00:00:00Z',
+      premiumType: 'csp_expired',
+      premium_type: 'csp_expired'
+    },
+    {
+      id: 1730000006,
+      type: 'buy',
+      portfolio: firstPortfolio,
+      symbol: 'DEMO-RETAIL',
+      shares: 100,
+      price: 125,
+      date: '2025-06-06T00:00:00Z'
+    },
+    {
+      id: 1730000007,
+      type: 'sell',
+      portfolio: firstPortfolio,
+      symbol: 'DEMO-RETAIL',
+      shares: -100,
+      price: 150,
+      date: '2025-08-08T00:00:00Z'
+    }
+  ];
+}
+
+function checkAndLoadSampleData() {
+  const existingData = localStorage.getItem('portfolio_transactions');
+  const sampleDataLoaded = localStorage.getItem('sampleDataLoaded');
+  
+  // Only load sample data if NO data exists and we haven't loaded samples before
+  if (!existingData && !sampleDataLoaded) {
+    // Wait a bit for portfolios to initialize
+    setTimeout(() => {
+      let firstPortfolio = portfolios.filter(p => p.id !== 'total')[0]?.id;
+      
+      // If no portfolio exists, create one for sample data
+      if (!firstPortfolio) {
+        const samplePortfolioId = 'portfolio-' + Date.now();
+        portfolios.push({
+          id: samplePortfolioId,
+          name: 'Portfolio 1',
+          color: 1
+        });
+        savePortfolios();
+        firstPortfolio = samplePortfolioId;
+        
+        // Reinitialize portfolio UI
+        initializePortfolios();
+        
+        console.log('✅ Created sample portfolio:', firstPortfolio);
+      }
+      
+      if (firstPortfolio) {
+        transactions = loadSampleTransactions();
+        manualPrices = { 'DEMO-TECH': 110, 'DEMO-RETAIL': 150 };
+        livePrices = { ...manualPrices };
+        
+        // Mark that we've loaded sample data once
+        localStorage.setItem('sampleDataLoaded', 'true');
+        
+        console.log('✅ Loaded sample data with', transactions.length, 'transactions');
+        
+        // Refresh the display with sample data
+        refreshPricesAndNames();
+        
+        setTimeout(showSampleDataBanner, 500);
+      }
+    }, 100);
+    return true;
+  }
+  return false;
+}
+
+function showSampleDataBanner() {
+  const banner = document.createElement('div');
+  banner.id = 'sampleBanner';
+  banner.innerHTML = `
+    <div style="position: fixed; top: 70px; right: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white !important; padding: 16px 20px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); z-index: 9999; max-width: 350px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 8px; color: white !important;">
+        <strong style="color: white !important;">🎉 Demo Mode</strong>
+        <button onclick="this.closest('#sampleBanner').remove()" style="background: none; border: none; color: white !important; font-size: 18px; cursor: pointer; line-height: 1;">&times;</button>
+      </div>
+<p style="margin: 0 0 10px 0; font-size: 13px; color: white !important; line-height: 1.5;">Sample transactions loaded. Changes won't save until you add your own data. Go to Settings to add API key or choose Manual Mode.</p>
+      <button onclick="clearSampleAndStart()" style="width: 100%; background: white; color: #667eea !important; border: none; padding: 8px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 14px;">Clear & Start Fresh</button>
+    </div>
+  `;
+  document.body.appendChild(banner);
+}
+
+function clearSampleAndStart() {
+  // Clear all in-memory data
+  transactions = [];
+  manualPrices = {};
+  livePrices = {};
+  cashFlows = [];
+  
+  // Clear ONLY the sample data flag (keep all other settings)
+  localStorage.removeItem('sampleDataLoaded');
+  
+  // Remove the banner
+  const banner = document.getElementById('sampleBanner');
+  if (banner) banner.remove();
+  
+  // Refresh display
+  refreshPricesAndNames();
+  
+  alert('✅ Sample data cleared! You can now add your own transactions.Go to Settings to add API key or choose Manual Mode');
+}
 function populatePortfolioFilter() {
   const filterPortfolio = document.getElementById('filterPortfolio');
   if (!filterPortfolio) return;
@@ -9,19 +166,38 @@ function populatePortfolioFilter() {
 }
 function checkFirstVisit() {
   const hasVisited = localStorage.getItem('hasVisitedPortfolio');
-  if (!hasVisited) {
+  const hasSampleData = localStorage.getItem('sampleDataLoaded');
+  const hasTransactions = localStorage.getItem('portfolio_transactions');
+  
+  // Only show welcome modal if: first visit, no sample data, no real data
+  if (!hasVisited && !hasSampleData && !hasTransactions) {
     document.getElementById('welcomeModal').classList.add('active');
     localStorage.setItem('hasVisitedPortfolio', 'true');
   } else {
-    checkApiKey();
+    // Mark as visited even if we're showing sample data
+    localStorage.setItem('hasVisitedPortfolio', 'true');
+    // Only check API key if NOT in sample data mode
+    if (!hasSampleData) {
+      checkApiKey();
+    }
   }
 }
 
 function checkApiKey() {
   const apiKey = localStorage.getItem('apiKey');
-  if (!apiKey) {
+  const priceMode = localStorage.getItem('priceMode');
+  const hasSampleData = localStorage.getItem('sampleDataLoaded');
+  
+  // Don't bug user about API key if:
+  // 1. They're in sample data mode, OR
+  // 2. They already chose manual mode
+  if (hasSampleData || priceMode === 'manual') {
+    return;
+  }
+  
+  // Only show if no API key and no mode chosen
+  if (!apiKey && !priceMode) {
     document.getElementById('settingsModal').classList.add('active');
-    alert('Please enter your Twelve Data API key to use the portfolio tracker.');
   }
 }
 
@@ -223,6 +399,9 @@ async function loadDataFromLocalStorage() {
     if (storedTransactions) {
       transactions = JSON.parse(storedTransactions);
       console.log('✅ Loaded ' + transactions.length + ' transactions from localStorage');
+    } else {
+      // No stored data - check if we should load sample data
+      checkAndLoadSampleData();
     }
     
     // Load cash flows
@@ -329,7 +508,7 @@ async function addTransaction() {
     type: type, 
     portfolio: portfolio, 
     symbol: symbol, 
-    shares: shares, 
+    shares: type === 'sell' ? -Math.abs(shares) : shares, // Make SELL shares negative!
     price: price, 
     date: date
   };
