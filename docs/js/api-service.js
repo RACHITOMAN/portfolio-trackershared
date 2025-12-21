@@ -385,7 +385,8 @@ function refreshPricesAndNames() {
       globalSymbolData[t.symbol] = { 
         buys: 0,
         sells: 0, 
-        totalCost: 0, 
+        totalCost: 0,
+        sellProceeds: 0,  // Track total proceeds from sales
         firstDate: t.date, 
         lastDate: t.date,
         portfolio: t.portfolio
@@ -411,7 +412,8 @@ function refreshPricesAndNames() {
       
       globalSymbolData[t.symbol].portfolio = t.portfolio;
     } else if (t.type === 'sell') {
-      globalSymbolData[t.symbol].sells += Math.abs(t.shares); // Use absolute value since shares are negative
+      globalSymbolData[t.symbol].sells += Math.abs(t.shares);
+      globalSymbolData[t.symbol].sellProceeds += Math.abs(t.shares) * t.price;  // Track proceeds
     }
     
     if (t.date < globalSymbolData[t.symbol].firstDate) globalSymbolData[t.symbol].firstDate = t.date;
@@ -428,6 +430,7 @@ function refreshPricesAndNames() {
     const netShares = globalSymbolData[symbol].buys - globalSymbolData[symbol].sells;
     if (netShares > 0.001) {
       let baseCost = globalSymbolData[symbol].totalCost;
+      const sellProceeds = globalSymbolData[symbol].sellProceeds || 0;
       
       const coveredCallPremiums = transactions.filter(function(t) {
         return t.symbol === symbol && 
@@ -445,12 +448,23 @@ function refreshPricesAndNames() {
         return sum + (t.shares * t.price);
       }, 0);
       
-      const adjustedTotalCost = baseCost - coveredCallPremiums - cspAssignedPremiums;
+      const cspExpiredPremiums = transactions.filter(function(t) {
+        return t.symbol === symbol && 
+               t.type === 'premium' && 
+               t.premium_type === 'csp_expired';
+      }).reduce(function(sum, t) {
+        return sum + (t.shares * t.price);
+      }, 0);
       
-      const avgCost = globalSymbolData[symbol].buys > 0 ? adjustedTotalCost / globalSymbolData[symbol].buys : 0;
+      // CORRECT CALCULATION:
+      // Net investment = Total bought - Sale proceeds - All premiums
+      const totalCostForHolding = baseCost - sellProceeds - coveredCallPremiums - cspAssignedPremiums - cspExpiredPremiums;
+      
+      // Avg cost is net investment divided by remaining shares
+      const avgCost = netShares > 0 ? totalCostForHolding / netShares : 0;
+      
       const currentPrice = livePrices[symbol] || 0;
       const currentValue = netShares * currentPrice;
-      const totalCostForHolding = netShares * avgCost;
       
       globalSymbolData[symbol].netShares = netShares;
       globalSymbolData[symbol].avgCost = avgCost;
